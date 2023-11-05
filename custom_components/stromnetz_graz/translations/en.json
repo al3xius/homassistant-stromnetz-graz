@@ -1,0 +1,20 @@
+{
+    "config": {
+        "abort": {
+            "already_configured": "Integration already configured!"
+        },
+        "error": {
+            "cannot_connect": "Unable to connect to API!",
+            "invalid_auth": "Invalid Credentials!",
+            "unknown": "Unknown Error!"
+        },
+        "step": {
+            "user": {
+                "data": {
+                    "password": "Password",
+                    "username": "Email"
+                }
+            }
+        }
+   }
+}
