@@ -1,4 +1,4 @@
-from homeassistant import config_entries, exceptions
+from homeassistant import config_entries
 import voluptuous as vol
 from .const import DOMAIN
 import logging

@@ -1,7 +1,6 @@
 """Platform for sensor integration."""
 from __future__ import annotations
-from config.custom_components.stromnetz_graz.hub import EnergyMeter
-
+from .hub import EnergyMeter
 from homeassistant.components.sensor import (
     SensorDeviceClass,
     SensorEntity,

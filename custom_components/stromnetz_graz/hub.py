@@ -9,12 +9,8 @@ from homeassistant.helpers.update_coordinator import (
     UpdateFailed,
 )
 import async_timeout
-from homeassistant.core import callback
 
 from datetime import timedelta
-
-import asyncio
-
 from .api import StromNetzGrazAPI, AuthException
 
 _LOGGER = logging.getLogger(__name__)
