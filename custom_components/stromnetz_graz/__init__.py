@@ -1,29 +1,38 @@
 """The example sensor integration."""
 from __future__ import annotations
-
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.typing import ConfigType
 from .const import DOMAIN
 from homeassistant.config_entries import ConfigEntry
-from .api import Coordianator, StromNetzGrazAPI
+from .api import StromNetzGrazAPI
+from .hub import Coordianator, meter_factory, Hub
+import logging
 
 PLATFORMS: list[str] = ["sensor"]
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+_LOGGER = logging.getLogger(__name__)
+
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     """Set up Hello World from a config entry."""
     # Store an instance of the "connecting" class that does the work of speaking
     # with your actual devices.
-    api = StromNetzGrazAPI(hass, entry.data["username"], entry.data["password"])
+
+    _LOGGER.info("Setting up Stromnetz Graz")
+
+    api = StromNetzGrazAPI(entry.data["email"], entry.data["password"])
     coordinator = Coordianator(hass, api)
-    await api.setupMeter(coordinator)
+    meters = await meter_factory(api, entry.data["installation"], coordinator)
+    coordinator.meters = meters
+    MeterHub = Hub(api, coordinator, meters)
+
     await coordinator.async_config_entry_first_refresh()
 
-    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = api
+    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = MeterHub
 
-    # This creates each HA object for each platform your device requires.
-    # It's done by calling the `async_setup_entry` function in each platform module.
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+
     return True
+
+
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""

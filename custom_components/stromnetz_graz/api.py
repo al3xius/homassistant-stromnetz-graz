@@ -1,217 +1,222 @@
 from __future__ import annotations
 import datetime
-from typing import Any, Callable
 import aiohttp
-from homeassistant.core import HomeAssistant
 from .const import API_HOST
 from homeassistant import exceptions
 import logging
-from homeassistant.helpers.update_coordinator import (
-    CoordinatorEntity,
-    DataUpdateCoordinator,
-    UpdateFailed,
-)
-import async_timeout
-from homeassistant.core import callback
-
-from datetime import timedelta
-
 import asyncio
+
 
 _LOGGER = logging.getLogger(__name__)
 
 class StromNetzGrazAPI():
-    def __init__(self, hass: HomeAssistant, username: str, password: str) -> None:
-        self.hass = hass
-        self.username = username
+    """
+        Stromnetz Graz API
+        Uses aiohttp to make the api requests
+        init takes username and password as parameters
+
+    """
+
+    def __init__(self, email: str, password: str) -> None:
+        """Initialize the API wrapper."""
+        self.email = email
         self.password = password
 
-        self.meters = []
         self.token = None
-        self.installationID = None
-        self.address = None
+        self.login_retries = 0
 
-        self.loginRetries = 0
+        self.session = aiohttp.ClientSession()
+
+    def __del__(self):
+        """Destroy resources."""
+        asyncio.ensure_future(self.session.close())
+
+    async def token_request(self) -> str:
+        """Get the token from the API."""
+        async with self.session.post(
+            f"{API_HOST}/login",
+            json={"email": self.email, "password": self.password},
+        ) as response:
+            if response.status != 200:
+                raise AuthException
+
+            data = await response.json()
+            resp = LoginResponse(data)
+            if not resp.success:
+                raise AuthException
+
+            self.login_retries = 0
+            return resp.token
+
+    async def loggedin_request(self, url: str, json: dict) -> dict:
+        """Make a request to the API. That take url and json as parameters."""
+        if not self.token:
+            self.token = await self.token_request()
+
+        async with self.session.post(
+            f"{API_HOST}{url}",
+            headers={"Authorization": f"Bearer {self.token}"},
+            json=json,
+        ) as response:
+            if response.status == 401:
+                if self.login_retries > 0:
+                    raise AuthException
+                # Retry once
+                self.token = await self.token_request()
+                self.login_retries += 1
+                return await self.loggedin_request(url, json)
+
+            if response.status != 200:
+                raise AuthException
+
+            data = await response.json()
+            # _LOGGER.info(f"{url}: {data}")
+            return data
+
+    async def get_installations(self) -> InstallationsResponse:
+        """Get the installations from the API."""
+        data = await self.loggedin_request("/getInstallations", {})
+        return InstallationsResponse(data)
+
+    async def get_readings(self, meter_point_id: int, start: datetime.datetime, end: datetime.datetime) -> ReadingResponse:
+        data = await self.loggedin_request("/getMeterReading", {
+            "meterPointId": meter_point_id,
+            "fromDate": start.strftime("%Y-%m-%dT%H:%M:%S"),
+            "toDate": end.strftime("%Y-%m-%dT%H:%M:%S"),
+            "interval": "Daily",
+            "unitOfConsumption": "KWH"
+        })
+
+        return ReadingResponse(data)
 
 
-    async def login(self) -> str:
-        _LOGGER.info(f"Logging in {self.username}")
-
-        async with aiohttp.ClientSession() as session:
-            async with session.post(API_HOST + "/login", json={
-               "email": self.username,
-               "password": self.password
-            }) as resp:
-                if resp.status == 200:
-                    data = await resp.json()
-
-                    if data and data["success"] and data["token"]:
-                        if data["success"] == False or not data["token"]:
-                           raise InvalidAuth
-                        else:
-                            return data["token"]
-                    else:
-                        raise InvalidAuth
-                elif resp.start == 401:
-                    raise InvalidAuth
-                else:
-                    raise FetchError
-
-    async def getToken(self) -> str:
-        if self.token is None:
-            self.token = await self.login()
-            self.loginRetries = 0
-
-        return self.token
-
-    async def getInstallations(self) -> Any:
-        _LOGGER.info(f"Getting installations {self.username}")
-        async with aiohttp.ClientSession() as session:
-            async with session.post(API_HOST + "/getInstallations", json={}, headers={
-                "Authorization": f"Bearer {await self.getToken()}"
-            }) as resp:
-                if resp.status == 200:
-                    data = await resp.json()
-                    return data
-                elif resp.status == 401:
-                    self.token = None
-                    self.loginRetries += 1
-                    raise InvalidAuth
-                else:
-                    raise FetchError
-
-    async def getLastValidReading(self, meter: EnergyMeter) -> float:
-        _LOGGER.info(f"Getting reading for {meter.meter_id}")
-        async with aiohttp.ClientSession() as session:
-             async with session.post(API_HOST + "/getMeterReading", json={
-                 "meterPointId": meter.meter_id,
-                 "interval": "Daily",
-                 "unitOfConsump": "KWH",
-                 "fromDate": meter.lastValid,
-                 "toDate": datetime.datetime.now(),
-                }, headers={
-                "Authorization": f"Bearer {await self.getToken()}"
-            }) as resp:
-                if resp.status == 200:
-                    data = await resp.json()
-                    _LOGGER.info(data)
-                    return 10
-                elif resp.status == 401:
-                    self.token = None
-                    self.loginRetries += 1
-                    raise InvalidAuth
-                else:
-                    raise FetchError
-
-    async def setupMeter(self, coordinator: Coordianator) -> None:
-        # TODO: make selectable
-        installations = await self.getInstallations()
-        installation = installations[0]
-        meter = installation["meterPoints"][0]
-
-        self.installationID = installation["installationID"]
-        self.address = installation["address"]
-        self.meters = [EnergyMeter(meter["meterPointID"], meter["shortName"], meter["readingsAvailableSince"], self, coordinator, 0)]
-
+class LoginResponse:
+    def __init__(self, data: dict) -> None:
+        self.data = data
 
     @property
-    def hub_id(self) -> str:
-        """ID for dummy hub."""
-        return self.installationID
-
-class InvalidAuth(exceptions.HomeAssistantError):
-    """Invalid Credentials"""
-
-class FetchError(exceptions.HomeAssistantError):
-    """Non 200 Status code"""
-
-
-
-class Coordianator(DataUpdateCoordinator):
-    def __init__(self, hass, api: StromNetzGrazAPI):
-        """Initialize my coordinator."""
-        super().__init__(
-            hass,
-            _LOGGER,
-            # Name of the data. For logging purposes.
-            name=api.address,
-            # Polling interval. Will only be polled if there are subscribers.
-            update_interval=timedelta(seconds=30),
-        )
-        self.api = api
-
-    async def _async_update_data(self):
-        """Fetch data from API endpoint.
-
-        This is the place to pre-process the data to lookup tables
-        so entities can quickly look up their data.
-        """
-        try:
-            # Note: asyncio.TimeoutError and aiohttp.ClientError are already
-            # handled by the data update coordinator.
-            async with async_timeout.timeout(10):
-                # Grab active context variables to limit data required to be fetched from API
-                # Note: using context is not required if there is no need or ability to limit
-                # data retrieved from API.
-                # listening_idx = set(self.async_contexts())
-
-                _LOGGER.log("Update Readings")
-                # Update meters
-
-                readings = [
-
-                ]
-                for meter in self.api.meters:
-                    reading = await self.api.getLastValidReading(meter)
-                    readings.append({
-                        "energy": 10
-                    })
-
-                return readings
-        except InvalidAuth as err:
-            # Raising ConfigEntryAuthFailed will cancel future updates
-            # and start a config flow with SOURCE_REAUTH (async_step_reauth)
-            # raise ConfigEntryAuthFailed from err
-            pass
-        except Exception as err:
-            raise UpdateFailed(f"Error communicating with API: {err}")
-
-
-
-class EnergyMeter(CoordinatorEntity, ):
-    def __init__(self, meterId: str, name: str, lastValid: str, api: StromNetzGrazAPI, coordinator, idx) -> None:
-        super().__init__(coordinator, context=idx)
-        self._id = meterId
-
-        self.api = api
-        self._name = name
-        self._callbacks = set()
-        self._loop = asyncio.get_event_loop()
-        self.lastValid = lastValid
-        self.energy = 0
-        self.coordinator = coordinator
+    def token(self) -> str:
+        return self.data["token"]
 
     @property
-    def meter_id(self) -> str:
-        """Return ID for meter."""
-        return self._id
-
-    def register_callback(self, callback: Callable[[], None]) -> None:
-        """Register callback, called when Roller changes state."""
-        self._callbacks.add(callback)
-
-    def remove_callback(self, callback: Callable[[], None]) -> None:
-        """Remove previously registered callback."""
-        self._callbacks.discard(callback)
-
+    def error(self) -> str:
+        return self.data["error"]
 
     @property
-    def online(self) -> bool:
-        return True
+    def success(self) -> bool:
+        return self.data["success"]
 
-    @callback
-    def _handle_coordinator_update(self) -> None:
-        """Handle updated data from the coordinator."""
-        self.energy = self.coordinator.data[self.idx]["energy"]
-        self.async_write_ha_state()
+class InstallationsResponse:
+    def __init__(self, data: dict) -> None:
+        self.data = data
 
+    @property
+    def installations(self) -> list[Installation]:
+        return [Installation(installation) for installation in self.data]
+
+class Installation:
+    def __init__(self, data: dict) -> None:
+        self.data = data
+
+    @property
+    def installationID(self) -> int:
+        return self.data["installationID"]
+
+    @property
+    def installationNumber(self) -> int:
+        return self.data["installationNumber"]
+
+    @property
+    def customerID(self) -> int:
+        return self.data["customerID"]
+
+    @property
+    def customerNumber(self) -> int:
+        return self.data["customerNumber"]
+
+    @property
+    def address(self) -> str:
+        return self.data["address"]
+
+    @property
+    def deliveryDirection(self) -> str:
+        return self.data["deliveryDirection"]
+
+    @property
+    def meterPoints(self) -> list[MeterPoint]:
+        return [MeterPoint(meterPoint) for meterPoint in self.data["meterPoints"]]
+
+class MeterPoint:
+    def __init__(self, data: dict) -> None:
+        self.data = data
+
+    @property
+    def meterPointID(self) -> int:
+        return self.data["meterPointID"]
+
+    @property
+    def name(self) -> str:
+        return self.data["name"]
+
+    @property
+    def shortName(self) -> str:
+        return self.data["shortName"]
+
+    @property
+    def readingsAvailableSince(self) -> datetime.datetime:
+        return datetime.datetime.strptime(self.data["readingsAvailableSince"], "%Y-%m-%dT%H:%M:%SZ")
+
+    @property
+    def meterType(self) -> str:
+        return self.data["meterType"]
+
+class ReadingResponse:
+    def __init__(self, data: dict) -> None:
+        self.data = data
+
+    @property
+    def intervalType(self) -> str:
+        return self.data["intervalType"]
+
+    @property
+    def readings(self) -> list[Reading]:
+        return [Reading(reading) for reading in self.data["readings"]]
+
+class Reading:
+    def __init__(self, data: dict) -> None:
+        self.data = data
+
+    @property
+    def readTime(self) -> datetime.datetime:
+        return datetime.datetime.strptime(self.data["readTime"], "%Y-%m-%dT%H:%M:%SZ")
+
+    @property
+    def readingValues(self) -> list[ReadingValue]:
+        return [ReadingValue(readingValue) for readingValue in self.data["readingValues"]]
+
+class ReadingValue:
+    def __init__(self, data: dict) -> None:
+        self.data = data
+
+    @property
+    def scale(self) -> str:
+        return self.data["scale"]
+
+    @property
+    def readingType(self) -> str:
+        return self.data["readingType"]
+
+    @property
+    def value(self) -> float:
+        return self.data["value"]
+
+    @property
+    def unit(self) -> str:
+        return self.data["unit"]
+
+    @property
+    def readingState(self) -> str:
+        return self.data["readingState"]
+
+class AuthException(exceptions.HomeAssistantError):
+    """Exception to indicate an authentication error."""

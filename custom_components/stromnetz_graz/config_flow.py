@@ -3,49 +3,102 @@ import voluptuous as vol
 from .const import DOMAIN
 import logging
 from homeassistant.core import HomeAssistant
-from typing import Any
+from typing import Any, Optional, Dict
 
-from .api import StromNetzGrazAPI, InvalidAuth
+from .api import StromNetzGrazAPI, AuthException
 
 _LOGGER = logging.getLogger(__name__)
 
-DATA_SCHEMA = vol.Schema({
-    vol.Required("username", description="Username"): str,
+CREDENTIALS_DATA_SCHEMA = vol.Schema({
+    vol.Required("email", description="Email"): str,
     vol.Required("password", description="Password"): str,
     }
 )
 
-async def validate_input(hass: HomeAssistant, data: dict) -> dict[str, Any]:
+async def validate_credentials(hass: HomeAssistant, data: dict) -> dict[str, Any]:
     # Try to login
-    api = StromNetzGrazAPI(hass, data["username"], data["password"])
+    api = StromNetzGrazAPI(data["email"], data["password"])
 
-    await api.login()
-    await api.setupMeter(None)
+    await api.token_request()
 
-
-    return {"address": api.address, "username": data["username"], "password": data["password"]}
+    return {"email": data["email"], "password": data["password"]}
 
 class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """StromNetzGraz config flow."""
+    """
+        StromNetzGraz config flow.
+        Step 1: Credentials
+        Step 2: Select Installation based on API response
+    """
     VERSION = 1
 
-    async def async_step_user(self, user_input=None):
-        """Handle the initial step."""
+    data: Optional[Dict[str, Any]]
 
-        errors = {}
+
+    async def async_step_user(self, user_input: Optional[Dict[str, Any]] = None):
+        """Handle Credentials. Then select installation."""
+        errors: Dict[str, str] = {}
+
         if user_input is not None:
             try:
-                info = await validate_input(self.hass, user_input)
-
-                return self.async_create_entry(title=info["address"], data=user_input)
-            except InvalidAuth:
-                _LOGGER.error("Invalid Credentials!")
-                errors["base"] = "invalid_auth"
-            except Exception:  # pylint: disable=broad-except
-                _LOGGER.exception("Unexpected exception")
+                data = await validate_credentials(self.hass, user_input)
+                # return self.async_create_entry(title=data["email"], data=data)
+            except AuthException:
+                errors["base"] = "auth"
+            except Exception:
                 errors["base"] = "unknown"
 
-        # If there is no user input or there were errors, show the form again, including any errors that were found with the input.
+
+            if not errors:
+                # Input is valid, set data.
+                self.data = user_input
+                self.data["installation"] = []
+                # Return the form of the next step.
+                return await self.async_step_installation()
+
         return self.async_show_form(
-            step_id="user", data_schema=DATA_SCHEMA, errors=errors, last_step=True
+            step_id="user", data_schema=CREDENTIALS_DATA_SCHEMA, errors=errors
+        )
+
+
+    async def async_step_installation(self, user_input: Optional[Dict[str, Any]] = None):
+        """Handle installation selection."""
+
+        errors: Dict[str, str] = {}
+
+        if user_input is not None:
+            # no need to validate
+
+            if self.data:
+                self.data["installation"] = user_input["installation"]
+                api = StromNetzGrazAPI(self.data["email"], self.data["password"])
+                data = await api.get_installations()
+
+                # Get Address
+                address = self.data["installation"]
+                for installation in data.installations:
+                    if installation.installationID == self.data["installation"]:
+                        address = installation.address
+
+                return self.async_create_entry(title=address, data=self.data)
+
+        installations = []
+        if self.data:
+            api = StromNetzGrazAPI(self.data["email"], self.data["password"])
+            data = await api.get_installations()
+            installations = data.installations
+
+        # Schema: Dropdown of installation address but value is the installation object
+        installations_schema = vol.Schema(
+            {
+                vol.Required(
+                    "installation",
+                    description="Select the installation you want to add",
+                ): vol.In(
+                    {installation.installationID: installation.address for installation in installations}
+                )
+            }
+        )
+
+        return self.async_show_form(
+            step_id="installation", data_schema=installations_schema, errors=errors, last_step=False
         )

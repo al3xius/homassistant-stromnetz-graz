@@ -12,7 +12,7 @@
             "user": {
                 "data": {
                     "password": "Password",
-                    "username": "Email"
+                    "email": "Email"
                 }
             }
         }
