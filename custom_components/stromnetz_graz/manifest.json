@@ -2,7 +2,7 @@
     "domain": "stromnetz_graz",
     "name": "Stromnetz Graz",
     "codeowners": [],
-    "dependencies": [],
+    "dependencies": ["recorder"],
     "documentation": "https://github.com/al3xius/homassistant-stromnetz-graz",
     "iot_class": "cloud_polling",
     "requirements": [],

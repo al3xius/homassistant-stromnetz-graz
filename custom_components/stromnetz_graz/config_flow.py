@@ -4,6 +4,7 @@ from .const import DOMAIN
 import logging
 from homeassistant.core import HomeAssistant
 from typing import Any, Optional, Dict
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import StromNetzGrazAPI, AuthException
 

@@ -28,7 +28,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
 
     sensors = []
     for meter in MeterHub.meters:
-        sensors.append(EnergySensor(meter))
+        # sensors.append(EnergySensor(meter))
         sensors.append(MeterReadingSensor(meter))
     async_add_entities(sensors)
 
@@ -92,6 +92,7 @@ class MeterReadingSensor(CoordinatorEntity, SensorEntity):
     _attr_device_class = SensorDeviceClass.ENERGY
     _attr_state_class = SensorStateClass.TOTAL_INCREASING
 
+
     def __init__(self, meter: EnergyMeter) -> None:
         """Initialize the sensor."""
         super().__init__(meter.coordinator, context=meter.meter_id)
@@ -114,18 +115,23 @@ class MeterReadingSensor(CoordinatorEntity, SensorEntity):
         """Return the name of the sensor."""
         return 'Meter Reading'
 
-    @property
-    def state(self):
-        """Return the state of the sensor."""
-        return self._state
+    # @property
+    # def state(self):
+    #     """Return the state of the sensor."""
+    #     return self._state
 
     @property
     def unit_of_measurement(self) -> str:
         """Return the unit of measurement."""
         return UnitOfEnergy.KILO_WATT_HOUR
 
-    @callback
-    def _handle_coordinator_update(self) -> None:
-        """Handle updated data from the coordinator."""
-        self._state = self.coordinator.data[self._meter.meter_id]["reading"]
-        self.async_write_ha_state()
+    # @callback
+    # def _handle_coordinator_update(self) -> None:
+    #     """Handle updated data from the coordinator."""
+    #     self._state = self.coordinator.data[self._meter.meter_id]["reading"]
+    #     self.async_write_ha_state()
+
+    @property
+    def native_value(self):
+        """Return the value of the sensor."""
+        return self._meter.reading

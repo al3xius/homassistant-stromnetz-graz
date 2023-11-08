@@ -1,5 +1,6 @@
 from __future__ import annotations
 import datetime
+from typing import Optional
 import aiohttp
 from .const import API_HOST
 from homeassistant import exceptions
@@ -17,7 +18,7 @@ class StromNetzGrazAPI():
 
     """
 
-    def __init__(self, email: str, password: str) -> None:
+    def __init__(self, email: str, password: str, session: Optional[aiohttp.ClientSession] = None) -> None:
         """Initialize the API wrapper."""
         self.email = email
         self.password = password
@@ -25,11 +26,13 @@ class StromNetzGrazAPI():
         self.token = None
         self.login_retries = 0
 
-        self.session = aiohttp.ClientSession()
+        if session is None:
+            self.session = aiohttp.ClientSession()
+        if session is not None:
+            self.session = session
 
-    def __del__(self):
-        """Destroy resources."""
-        asyncio.ensure_future(self.session.close())
+
+
 
     async def token_request(self) -> str:
         """Get the token from the API."""
@@ -88,7 +91,6 @@ class StromNetzGrazAPI():
         })
 
         return ReadingResponse(data)
-
 
 class LoginResponse:
     def __init__(self, data: dict) -> None:
@@ -182,6 +184,13 @@ class ReadingResponse:
     def readings(self) -> list[Reading]:
         return [Reading(reading) for reading in self.data["readings"]]
 
+    @property
+    def meterReadingValues(self) -> list[TimedReadingValue]:
+        # extract reading values from readings with readingtype "MR" and add timestamp
+        values = [TimedReadingValue(readingValue, reading.readTime) for reading in self.readings for readingValue in reading.readingValues if readingValue.readingType == "MR"]
+        # sort by time
+        return sorted(values, key=lambda x: x.time)
+
 class Reading:
     def __init__(self, data: dict) -> None:
         self.data = data
@@ -197,6 +206,9 @@ class Reading:
 class ReadingValue:
     def __init__(self, data: dict) -> None:
         self.data = data
+
+    def __repr__(self) -> str:
+        return f"ReadingValue({self.readingType}: {self.value} {self.unit})"
 
     @property
     def scale(self) -> str:
@@ -217,6 +229,14 @@ class ReadingValue:
     @property
     def readingState(self) -> str:
         return self.data["readingState"]
+
+class TimedReadingValue(ReadingValue):
+    def __init__(self, reading: ReadingValue, time: datetime.datetime) -> None:
+        self.data = reading.data
+        self.time = time
+
+    def __repr__(self) -> str:
+        return super().__repr__() + f" at {self.time}"
 
 class AuthException(exceptions.HomeAssistantError):
     """Exception to indicate an authentication error."""

@@ -1,6 +1,11 @@
 from __future__ import annotations
 import datetime
+import time
 from typing import Any, Callable, Optional, Dict
+
+import pytz
+from homeassistant.components.recorder.models.statistics import StatisticData, StatisticMetaData
+from homeassistant.const import ENERGY_KILO_WATT_HOUR
 from homeassistant.core import HomeAssistant
 import logging
 from homeassistant.helpers.update_coordinator import (
@@ -8,10 +13,18 @@ from homeassistant.helpers.update_coordinator import (
     DataUpdateCoordinator,
     UpdateFailed,
 )
-import async_timeout
 
 from datetime import timedelta
-from .api import StromNetzGrazAPI, AuthException
+from .api import  StromNetzGrazAPI, AuthException, TimedReadingValue
+from .const import DOMAIN
+
+from homeassistant.components.recorder import get_instance
+from homeassistant.components.recorder.statistics import (
+    async_add_external_statistics,
+    async_import_statistics,
+    get_last_statistics,
+    statistics_during_period,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -26,7 +39,7 @@ class Coordianator(DataUpdateCoordinator):
             # Name of the data. For logging purposes.
             name="Stromnetz Graz",
             # Polling interval. Will only be polled if there are subscribers.
-            update_interval=timedelta(seconds=30),
+            update_interval=timedelta(minutes=30),
         )
         self.api = api
         self.meters: list[EnergyMeter] = []
@@ -42,47 +55,62 @@ class Coordianator(DataUpdateCoordinator):
         try:
             # Note: asyncio.TimeoutError and aiohttp.ClientError are already
             # handled by the data update coordinator.
-            async with async_timeout.timeout(10):
+            for meter in self.meters:
+                statistic_id = f"{DOMAIN}:{meter.meter_id}_reading"
+                last_stats = await get_instance(self.hass).async_add_executor_job(
+                    get_last_statistics, self.hass, 1, statistic_id, True, {"state"}
+                )
 
-                data = {}
-                for meter in self.meters:
+                reading = None
+                if not last_stats:
                     reading = await self.api.get_readings(meter.meter_id, meter.lastValid, datetime.datetime.now())
+                else:
+                    last_stats_time = datetime.datetime.fromtimestamp(last_stats[statistic_id][0]["start"])
 
-                    # Find valid reading from last to first
-                    meter_data = {
-                        "reading": None,
-                        "consumption": None
-                    }
-                    for r in reversed(reading.readings):
-                        readingValues = r.readingValues
+                    reading = await self.api.get_readings(meter.meter_id, last_stats_time, datetime.datetime.now())
 
-                        meter_data: Dict[str, Optional[float]] = {
-                            "reading": None,
-                            "consumption": None
-                        }
-                        for readingValue in readingValues:
-                            if not readingValue.readingState == "Valid":
-                                continue
 
-                            if readingValue.readingType == "CONSUMP":
-                                meter_data["consumption"] = readingValue.value
-                            elif readingValue.readingType == "MR":
-                                meter_data["reading"] = readingValue.value
+                meterReadings = reading.meterReadingValues
+                # Find all readings from start up to last valid
+                validReadings: list[TimedReadingValue] = []
+                for r in meterReadings:
+                    if not r.readingState == "Valid":
+                        break
+                    validReadings.append(r)
 
-                        if meter_data["reading"] is not None and meter_data["consumption"] is not None:
-                            meter.lastValid = r.readTime
-                            break
+                meter.setReading(validReadings[-1])
 
-                    _LOGGER.info(f"Meter {meter.meter_id} has reading {meter_data['reading']} and consumption {meter_data['consumption']}")
-                    data[meter.meter_id] = meter_data
+                # Update history with valid readings
+                statistics = []
+                for r in validReadings:
+                    timestamp = r.time.replace(tzinfo=pytz.utc, minute=0, second=0, microsecond=0)
+                    statistics.append(
+                        StatisticData(
+                            start=timestamp,
+                            state=r.value,
+                            sum=r.value
+                        )
+                    )
 
-                return data
+                metadata = StatisticMetaData(
+                    source=DOMAIN,
+                    name=f"{meter.name}",
+                    statistic_id=statistic_id,
+                    has_mean=False,
+                    unit_of_measurement=ENERGY_KILO_WATT_HOUR,
+                    has_sum=True,
+                )
+
+                async_add_external_statistics(self.hass, metadata, statistics)
+
         except AuthException as err:
             # Raising ConfigEntryAuthFailed will cancel future updates
             # and start a config flow with SOURCE_REAUTH (async_step_reauth)
             # raise ConfigEntryAuthFailed from err
+            _LOGGER.error("Invalid Credentials: %s", err)
             pass
         except Exception as err:
+            _LOGGER.error("Error communicating with API: %s", err)
             raise UpdateFailed(f"Error communicating with API: {err}")
 
 
@@ -119,6 +147,10 @@ class EnergyMeter(CoordinatorEntity):
     @property
     def online(self) -> bool:
         return True
+
+    def setReading(self, reading: TimedReadingValue):
+        self.reading = reading.value
+        self.lastValid = reading.time
 
 class Hub():
     def __init__(self, api: StromNetzGrazAPI, coordinator: Coordianator, meters: list[EnergyMeter]) -> None:
