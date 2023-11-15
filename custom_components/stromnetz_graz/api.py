@@ -81,12 +81,12 @@ class StromNetzGrazAPI():
         data = await self.loggedin_request("/getInstallations", {})
         return InstallationsResponse(data)
 
-    async def get_readings(self, meter_point_id: int, start: datetime.datetime, end: datetime.datetime) -> ReadingResponse:
+    async def get_readings(self, meter_point_id: int, start: datetime.datetime, end: datetime.datetime, quaterHour: bool = True) -> ReadingResponse:
         data = await self.loggedin_request("/getMeterReading", {
             "meterPointId": meter_point_id,
             "fromDate": start.strftime("%Y-%m-%dT%H:%M:%S"),
             "toDate": end.strftime("%Y-%m-%dT%H:%M:%S"),
-            "interval": "Daily",
+            "interval": "QuarterHourly" if quaterHour else "Daily",
             "unitOfConsumption": "KWH"
         })
 
@@ -197,7 +197,12 @@ class Reading:
 
     @property
     def readTime(self) -> datetime.datetime:
-        return datetime.datetime.strptime(self.data["readTime"], "%Y-%m-%dT%H:%M:%SZ")
+        if self.data["readTime"][-1] == 'Z':
+            # parse 2023-11-12T23:00:00Z
+            return datetime.datetime.strptime(self.data["readTime"], "%Y-%m-%dT%H:%M:%SZ").astimezone(datetime.timezone.utc)
+
+        # parse 2023-11-03T00:00:00.000+01:00
+        return datetime.datetime.strptime(self.data["readTime"], "%Y-%m-%dT%H:%M:%S.%f+%z").astimezone(datetime.timezone.utc)
 
     @property
     def readingValues(self) -> list[ReadingValue]:

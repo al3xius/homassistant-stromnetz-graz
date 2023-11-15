@@ -44,6 +44,18 @@ class Coordianator(DataUpdateCoordinator):
         self.api = api
         self.meters: list[EnergyMeter] = []
 
+    def _only_last_reading_of_each_hour(self, valid_readings: list[TimedReadingValue]) -> list[TimedReadingValue]:
+        """Return only the last reading of each hour."""
+        last_reading_of_each_hour = []
+        for reading in valid_readings:
+            if not last_reading_of_each_hour:
+                last_reading_of_each_hour.append(reading)
+            else:
+                last_reading = last_reading_of_each_hour[-1]
+                if reading.time.hour != last_reading.time.hour:
+                    last_reading_of_each_hour.append(reading)
+        return last_reading_of_each_hour
+
     async def _async_update_data(self):
         """Fetch data from API endpoint.
 
@@ -56,29 +68,46 @@ class Coordianator(DataUpdateCoordinator):
             # Note: asyncio.TimeoutError and aiohttp.ClientError are already
             # handled by the data update coordinator.
             for meter in self.meters:
+                _LOGGER.info("Updating meter %s", meter.name)
                 statistic_id = f"{DOMAIN}:{meter.meter_id}_reading"
+                _LOGGER.info("Getting last statistics for %s", statistic_id)
                 last_stats = await get_instance(self.hass).async_add_executor_job(
                     get_last_statistics, self.hass, 1, statistic_id, True, {"state"}
                 )
 
+                _LOGGER.info("Found %s last statistics for meter %s", len(last_stats), meter.name)
                 reading = None
                 if not last_stats:
                     reading = await self.api.get_readings(meter.meter_id, meter.lastValid, datetime.datetime.now())
                 else:
                     last_stats_time = datetime.datetime.fromtimestamp(last_stats[statistic_id][0]["start"])
-
+                    last_stats_time = last_stats_time.replace(minute=1)
+                    _LOGGER.info("Last statistics for meter %s is from %s", meter.name, last_stats_time)
                     reading = await self.api.get_readings(meter.meter_id, last_stats_time, datetime.datetime.now())
+
+                _LOGGER.info("Found %s readings for meter %s", len(reading.meterReadingValues), meter.name)
 
 
                 meterReadings = reading.meterReadingValues
                 # Find all readings from start up to last valid
                 validReadings: list[TimedReadingValue] = []
                 for r in meterReadings:
+                    if r.readingState == "NotAvailable":
+                        continue
                     if not r.readingState == "Valid":
                         break
                     validReadings.append(r)
 
+                _LOGGER.info("Found %s valid readings for meter %s", len(validReadings), meter.name)
+                if len(validReadings) == 0:
+                    continue
+
+                _LOGGER.info("Setting reading for meter %s to %s", meter.name, validReadings[-1].value)
                 meter.setReading(validReadings[-1])
+
+                # Filter out all but the last reading of each hour
+                validReadings = self._only_last_reading_of_each_hour(validReadings)
+                _LOGGER.info("Found %s last readings for meter %s: %s", len(validReadings), meter.name, validReadings[-1])
 
                 # Update history with valid readings
                 statistics = []
@@ -91,6 +120,8 @@ class Coordianator(DataUpdateCoordinator):
                             sum=r.value
                         )
                     )
+
+                _LOGGER.info("Adding %s statistics for meter %s", len(statistics), meter.name)
 
                 metadata = StatisticMetaData(
                     source=DOMAIN,
