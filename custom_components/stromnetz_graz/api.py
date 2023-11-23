@@ -72,8 +72,12 @@ class StromNetzGrazAPI():
             if response.status != 200:
                 raise AuthException
 
+            _LOGGER.info(f"{url}: {json}")
+            _LOGGER.info(f"{url}: {response.status}")
+            _LOGGER.info(f"{url}: {response.headers}")
+
             data = await response.json()
-            # _LOGGER.info(f"{url}: {data}")
+            _LOGGER.info(f"{url}: {data}")
             return data
 
     async def get_installations(self) -> InstallationsResponse:
