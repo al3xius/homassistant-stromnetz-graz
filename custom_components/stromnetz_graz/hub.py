@@ -94,6 +94,10 @@ class Coordianator(DataUpdateCoordinator):
                 for r in meterReadings:
                     if r.readingState == "NotAvailable":
                         continue
+                    # TODO: Handle estimated readings better
+                    if r.readingState == "Estimated":
+                        continue
+                    _LOGGER.info("Reading State %s", r.readingState)
                     if not r.readingState == "Valid":
                         break
                     validReadings.append(r)
