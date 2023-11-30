@@ -1,6 +1,5 @@
 from __future__ import annotations
 import datetime
-import time
 from typing import Any, Callable, Optional, Dict
 
 import pytz
@@ -15,15 +14,13 @@ from homeassistant.helpers.update_coordinator import (
 )
 
 from datetime import timedelta
-from .api import  StromNetzGrazAPI, AuthException, TimedReadingValue
+from .api import  StromNetzGrazAPI, AuthException, TimedReadingValue, UnknownResponesExeption
 from .const import DOMAIN
 
 from homeassistant.components.recorder import get_instance
 from homeassistant.components.recorder.statistics import (
     async_add_external_statistics,
-    async_import_statistics,
     get_last_statistics,
-    statistics_during_period,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -32,13 +29,10 @@ _LOGGER = logging.getLogger(__name__)
 
 class Coordianator(DataUpdateCoordinator):
     def __init__(self, hass: HomeAssistant, api: StromNetzGrazAPI):
-        """Initialize my coordinator."""
         super().__init__(
             hass,
             _LOGGER,
-            # Name of the data. For logging purposes.
             name="Stromnetz Graz",
-            # Polling interval. Will only be polled if there are subscribers.
             update_interval=timedelta(minutes=30),
         )
         self.api = api
@@ -97,8 +91,8 @@ class Coordianator(DataUpdateCoordinator):
                     # TODO: Handle estimated readings better
                     if r.readingState == "Estimated":
                         continue
-                    _LOGGER.info("Reading State %s", r.readingState)
                     if not r.readingState == "Valid":
+                        _LOGGER.info("Reading State %s", r.readingState)
                         break
                     validReadings.append(r)
 
@@ -144,6 +138,9 @@ class Coordianator(DataUpdateCoordinator):
             # raise ConfigEntryAuthFailed from err
             _LOGGER.error("Invalid Credentials: %s", err)
             pass
+        except UnknownResponesExeption as err:
+            _LOGGER.error("Unknown response from API: %s", err)
+            raise UpdateFailed(f"Unknown response from API: {err}")
         except Exception as err:
             _LOGGER.error("Error communicating with API: %s", err)
             raise UpdateFailed(f"Error communicating with API: {err}")

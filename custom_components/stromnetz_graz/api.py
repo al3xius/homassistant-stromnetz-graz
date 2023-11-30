@@ -5,7 +5,6 @@ import aiohttp
 from .const import API_HOST
 from homeassistant import exceptions
 import logging
-import asyncio
 
 
 _LOGGER = logging.getLogger(__name__)
@@ -41,11 +40,13 @@ class StromNetzGrazAPI():
             json={"email": self.email, "password": self.password},
         ) as response:
             if response.status != 200:
+                _LOGGER.error("Could not log in! Statuscode is: ", response.status)
                 raise AuthException
 
             data = await response.json()
             resp = LoginResponse(data)
             if not resp.success:
+                _LOGGER.error("Could not log in!")
                 raise AuthException
 
             self.login_retries = 0
@@ -62,7 +63,9 @@ class StromNetzGrazAPI():
             json=json,
         ) as response:
             if response.status == 401:
+                _LOGGER.warning("Token invalid: Try to regenerate.")
                 if self.login_retries > 0:
+                    _LOGGER.error("Could not log in! Too many retries.")
                     raise AuthException
                 # Retry once
                 self.token = await self.token_request()
@@ -70,14 +73,16 @@ class StromNetzGrazAPI():
                 return await self.loggedin_request(url, json)
 
             if response.status != 200:
-                raise AuthException
+                _LOGGER.error("Statuscode is: ", response.status)
+                raise UnknownResponesExeption
 
-            _LOGGER.info(f"{url}: {json}")
+
+            # _LOGGER.info(f"{url}: {json}")
             _LOGGER.info(f"{url}: {response.status}")
             _LOGGER.info(f"{url}: {response.headers}")
 
             data = await response.json()
-            _LOGGER.info(f"{url}: {data}")
+            # _LOGGER.info(f"{url}: {data}")
             return data
 
     async def get_installations(self) -> InstallationsResponse:
@@ -249,3 +254,6 @@ class TimedReadingValue(ReadingValue):
 
 class AuthException(exceptions.HomeAssistantError):
     """Exception to indicate an authentication error."""
+
+class UnknownResponesExeption(exceptions.HomeAssistantError):
+    """Exception to indicate that the resonse code is unknown."""
