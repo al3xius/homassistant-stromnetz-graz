@@ -14,7 +14,7 @@ from homeassistant.helpers.update_coordinator import (
 )
 
 from datetime import timedelta
-from .api import  StromNetzGrazAPI, AuthException, TimedReadingValue, UnknownResponesExeption
+from .api import  StromNetzGrazAPI, AuthException, TimedReadingValue, UnknownResponseExeption
 from .const import DOMAIN
 
 from homeassistant.components.recorder import get_instance
@@ -138,7 +138,7 @@ class Coordianator(DataUpdateCoordinator):
             # raise ConfigEntryAuthFailed from err
             _LOGGER.error("Invalid Credentials: %s", err)
             pass
-        except UnknownResponesExeption as err:
+        except UnknownResponseExeption as err:
             _LOGGER.error("Unknown response from API: %s", err)
             raise UpdateFailed(f"Unknown response from API: {err}")
         except Exception as err:

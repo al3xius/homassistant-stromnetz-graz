@@ -74,7 +74,12 @@ class StromNetzGrazAPI():
 
             if response.status != 200:
                 _LOGGER.error("Statuscode is: ", response.status)
-                raise UnknownResponesExeption
+                raise UnknownResponseExeption
+            
+            # check for mime type
+            if response.headers.get("Content-Type") != "application/json":
+                _LOGGER.error("Unknown response from API: %s", response.headers.get("Content-Type"))
+                raise UnknownResponseExeption
 
 
             # _LOGGER.info(f"{url}: {json}")
@@ -255,5 +260,5 @@ class TimedReadingValue(ReadingValue):
 class AuthException(exceptions.HomeAssistantError):
     """Exception to indicate an authentication error."""
 
-class UnknownResponesExeption(exceptions.HomeAssistantError):
-    """Exception to indicate that the resonse code is unknown."""
+class UnknownResponseExeption(exceptions.HomeAssistantError):
+    """Exception to indicate that the response code is unknown."""
