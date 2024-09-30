@@ -28,7 +28,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """
         StromNetzGraz config flow.
         Step 1: Credentials
-        Step 2: Select Installation based on API response
+        Step 2: Select Energy Meter
     """
     VERSION = 1
 
@@ -93,7 +93,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             {
                 vol.Required(
                     "installation",
-                    description="Select the installation you want to add",
+                    description="Select the meter you want to add",
                 ): vol.In(
                     {installation.installationID: installation.address for installation in installations}
                 )

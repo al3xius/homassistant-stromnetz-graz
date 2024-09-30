@@ -74,7 +74,8 @@ class Coordianator(DataUpdateCoordinator):
                 if not last_stats:
                     reading = await self.api.get_readings(meter.meter_id, meter.lastValid, datetime.datetime.now())
                 else:
-                    last_stats_time = datetime.datetime.fromtimestamp(last_stats[statistic_id][0]["start"])
+                    start = last_stats[statistic_id][0].get("start")
+                    last_stats_time = datetime.datetime.fromtimestamp(start or 0)
                     last_stats_time = last_stats_time.replace(minute=1)
                     _LOGGER.info("Last statistics for meter %s is from %s", meter.name, last_stats_time)
                     reading = await self.api.get_readings(meter.meter_id, last_stats_time, datetime.datetime.now())
@@ -110,6 +111,8 @@ class Coordianator(DataUpdateCoordinator):
                 # Update history with valid readings
                 statistics = []
                 for r in validReadings:
+                    # convert from vienna time to utc
+
                     timestamp = r.time.replace(tzinfo=pytz.utc, minute=0, second=0, microsecond=0)
                     statistics.append(
                         StatisticData(
