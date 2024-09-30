@@ -39,13 +39,18 @@ class StromNetzGrazAPI():
             f"{API_HOST}/login",
             json={"email": self.email, "password": self.password},
         ) as response:
+            print("Logging in!")
+            print(response)
             if response.status != 200:
                 _LOGGER.error("Could not log in! Statuscode is: ", response.status)
                 raise AuthException
 
-            if response.headers.get("Content-Type") != "application/json":
-                _LOGGER.error("Unknown response from API: %s", response.headers.get("Content-Type"))
-                raise UnknownResponseExeption
+            # check for mime type
+            mime = response.headers.get("Content-Type") or ""
+
+            if "application/json" not in mime:
+                _LOGGER.error("Unknown response from API: %s", mime)
+                raise AuthException
 
 
             data = await response.json()
@@ -80,10 +85,11 @@ class StromNetzGrazAPI():
             if response.status != 200:
                 _LOGGER.error("Statuscode is: ", response.status)
                 raise UnknownResponseExeption
-            
+
             # check for mime type
-            if response.headers.get("Content-Type") != "application/json":
-                _LOGGER.error("Unknown response from API: %s", response.headers.get("Content-Type"))
+            mime = response.headers.get("Content-Type") or ""
+            if "application/json" not in mime:
+                _LOGGER.error("Unknown response from API: %s", mime)
                 raise UnknownResponseExeption
 
 
