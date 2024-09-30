@@ -43,6 +43,11 @@ class StromNetzGrazAPI():
                 _LOGGER.error("Could not log in! Statuscode is: ", response.status)
                 raise AuthException
 
+            if response.headers.get("Content-Type") != "application/json":
+                _LOGGER.error("Unknown response from API: %s", response.headers.get("Content-Type"))
+                raise UnknownResponseExeption
+
+
             data = await response.json()
             resp = LoginResponse(data)
             if not resp.success:
