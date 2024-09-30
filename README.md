@@ -15,3 +15,5 @@ Note this is still in development and only a basic working implementation.
 ## TODO
 - configure quater hour
 - allow for energy price
+- make sure timezone is correct
+- finish readme
