@@ -28,61 +28,14 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
 
     # _LOGGER.info(f"Setup Sensors with API: {api.username}")
 
-    sensors = [MeterReadingSensor(meter) for meter in MeterHub.meters]
+    sensors = []
+    for meter in MeterHub.meters:
+        sensor = MeterReadingSensor(meter)
+        sensors.append(sensor)
+
+    # add sensors
     async_add_entities(sensors)
 
-
-class EnergySensor(CoordinatorEntity, SensorEntity):
-    """Enery Sensor base on Api data"""
-
-    _attr_name = "Consumed Energy"
-    _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
-    _attr_device_class = SensorDeviceClass.ENERGY
-    _attr_state_class = SensorStateClass.MEASUREMENT
-
-    def __init__(self, meter: EnergyMeter) -> None:
-        """Initialize the sensor."""
-        super().__init__(meter.coordinator, context=meter.meter_id)
-        self._state = None
-        self._meter = meter
-        self._attr_unique_id = f"{self._meter.meter_id}_energy"
-
-    @property
-    def device_info(self):
-        """Return information to link this entity with the correct device."""
-        return {
-            "identifiers": {(DOMAIN, self._meter.meter_id)},
-            "name": self._meter.name,
-            "manufacturer": "Stromnetz Graz",
-        }
-
-    @property
-    def available(self) -> bool:
-        """Return True if meter available"""
-        return self._meter.online
-
-    @property
-    def name(self) -> str:
-        """Return the name of the sensor."""
-        return "Consumed Energy"
-
-    @property
-    def state(self):
-        """Return the state of the sensor."""
-        return self._state
-
-    @property
-    def unit_of_measurement(self) -> str:
-        """Return the unit of measurement."""
-        return UnitOfEnergy.KILO_WATT_HOUR
-
-    @callback
-    def _handle_coordinator_update(self) -> None:
-        """Handle updated data from the coordinator."""
-        # _LOGGER.info("Updating meter {self._meter._id}")
-        # _LOGGER.info("Data: {self._meter.coordinator.data}")
-        self._state = self.coordinator.data[str(self._meter.meter_id)]["consumption"]
-        self.async_write_ha_state()
 
 
 class MeterReadingSensor(CoordinatorEntity, SensorEntity):
@@ -111,7 +64,7 @@ class MeterReadingSensor(CoordinatorEntity, SensorEntity):
 
     @property
     def available(self) -> bool:
-        """Return True if meter available"""
+        """Return True if meter available."""
         return self._meter.online
 
     @property

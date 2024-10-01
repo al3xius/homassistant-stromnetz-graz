@@ -119,8 +119,29 @@ class StromNetzGrazAPI:
     ) -> ReadingResponse:
         """Get the readings from the API."""
         tz_vienna = await dt_util.async_get_time_zone("Europe/Vienna")
-        start = start.astimezone(tz_vienna)
+        tz_vienna = tz_vienna or pytz.utc
+
+        # Start time cannot be have minutes larger 45
+        start = start.astimezone(tz_vienna).replace(minute=0)
         end = end.astimezone(tz_vienna)
+
+        duration = end - start
+
+        # if larger than 5 months recursive call
+        if duration.days > 30*5:
+            # split the duration in half
+            half = duration // 2
+            # get the first half
+            first_half = await self.get_readings(
+                meter_point_id, start, start + half, quaterHour
+            )
+            # get the second half
+            second_half = await self.get_readings(
+                meter_point_id, start + half, end, quaterHour
+            )
+
+            # combine the readings
+            return first_half.merge(second_half)
 
         request_body = {
             "meterPointId": meter_point_id,
@@ -137,7 +158,7 @@ class StromNetzGrazAPI:
             request_body,
         )
 
-        return ReadingResponse(data, tz_vienna or pytz.utc)
+        return ReadingResponse(data, tz_vienna)
 
 
 class LoginResponse:
@@ -252,6 +273,23 @@ class ReadingResponse:
         ]
         # sort by time
         return sorted(values, key=lambda x: x.time)
+
+    def merge(self, other: ReadingResponse) -> ReadingResponse:
+        """Merge two ReadingResponse objects."""
+
+        if self.intervalType != other.intervalType:
+            raise ValueError("Cannot merge different interval types")
+
+        # merge data
+        merged_data = {
+            "intervalType": self.intervalType,
+            "readings": self.data["readings"] + other.data["readings"],
+        }
+
+        return ReadingResponse(
+            merged_data,
+            self.tz,
+        )
 
 
 class Reading:
