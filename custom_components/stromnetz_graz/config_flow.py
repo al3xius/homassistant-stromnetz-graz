@@ -25,11 +25,12 @@ async def validate_credentials(hass: HomeAssistant, data: dict) -> dict[str, Any
     return {"email": data["email"], "password": data["password"]}
 
 class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+    """StromNetzGraz config flow.
+
+    Step 1: Credentials
+    Step 2: Select Energy Meter
     """
-        StromNetzGraz config flow.
-        Step 1: Credentials
-        Step 2: Select Energy Meter
-    """
+
     VERSION = 1
 
     data: Optional[Dict[str, Any]]

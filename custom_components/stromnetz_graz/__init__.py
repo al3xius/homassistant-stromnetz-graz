@@ -13,10 +13,6 @@ PLATFORMS: list[str] = ["sensor"]
 _LOGGER = logging.getLogger(__name__)
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
-    """Set up Hello World from a config entry."""
-    # Store an instance of the "connecting" class that does the work of speaking
-    # with your actual devices.
-
     _LOGGER.info("Setting up Stromnetz Graz")
 
     api = StromNetzGrazAPI(entry.data["email"], entry.data["password"], async_get_clientsession(hass))

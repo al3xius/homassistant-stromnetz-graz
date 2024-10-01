@@ -1,24 +1,26 @@
 from __future__ import annotations
+from .const import API_HOST
+import aiohttp
 import datetime
 from typing import Optional
-import aiohttp
 import pytz
-from .const import API_HOST
-from homeassistant import exceptions
 import logging
-
+from homeassistant import exceptions
+from homeassistant.core import dt_util
 
 _LOGGER = logging.getLogger(__name__)
 
-class StromNetzGrazAPI():
-    """
-        Stromnetz Graz API
-        Uses aiohttp to make the api requests
-        init takes username and password as parameters
 
+class StromNetzGrazAPI:
+    """Stromnetz Graz API.
+
+    Uses aiohttp to make the api requests
+    init takes username and password as parameters
     """
 
-    def __init__(self, email: str, password: str, session: Optional[aiohttp.ClientSession] = None) -> None:
+    def __init__(
+        self, email: str, password: str, session: Optional[aiohttp.ClientSession] = None
+    ) -> None:
         """Initialize the API wrapper."""
         self.email = email
         self.password = password
@@ -31,9 +33,6 @@ class StromNetzGrazAPI():
         if session is not None:
             self.session = session
 
-
-
-
     async def token_request(self) -> str:
         """Get the token from the API."""
         async with self.session.post(
@@ -41,16 +40,17 @@ class StromNetzGrazAPI():
             json={"email": self.email, "password": self.password},
         ) as response:
             if response.status != 200:
-                _LOGGER.error("Login - Could not log in! Statuscode is: ", response.status)
+                _LOGGER.error(
+                    "Login - Could not log in! Statuscode is: %s", response.status
+                )
                 raise AuthException
-            
+
             # check for mime type
             mime = response.headers.get("Content-Type") or ""
 
             if "application/json" not in mime:
                 _LOGGER.error("Login - Unknown response from API: %s", mime)
                 raise AuthException
-
 
             data = await response.json()
             resp = LoginResponse(data)
@@ -72,9 +72,9 @@ class StromNetzGrazAPI():
             json=json,
         ) as response:
             if response.status == 401:
-                _LOGGER.warning("Token invalid: Try to regenerate.")
+                _LOGGER.warning("Token invalid: Try to regenerate")
                 if self.login_retries > 0:
-                    _LOGGER.error("Could not log in! Too many retries.")
+                    _LOGGER.error("Could not log in! Too many retries")
                     raise AuthException
                 # Retry once
                 self.token = await self.token_request()
@@ -82,7 +82,7 @@ class StromNetzGrazAPI():
                 return await self.loggedin_request(url, json)
 
             if response.status != 200:
-                _LOGGER.error("%s - Statuscode is: ", url, response.status)
+                _LOGGER.error("%s - Statuscode is: %s", url, response.status)
                 raise UnknownResponseExeption
 
             # check for mime type
@@ -93,27 +93,41 @@ class StromNetzGrazAPI():
                 _LOGGER.error("%s - Body: %s", url, body)
                 raise UnknownResponseExeption
 
-
-            data = await response.json()
-            return data
+            return await response.json()
 
     async def get_installations(self) -> InstallationsResponse:
         """Get the installations from the API."""
         data = await self.loggedin_request("/getInstallations", {})
         return InstallationsResponse(data)
 
-    async def get_readings(self, meter_point_id: int, start: datetime.datetime, end: datetime.datetime, quaterHour: bool = True) -> ReadingResponse:
-        data = await self.loggedin_request("/getMeterReading", {
-            "meterPointId": meter_point_id,
-            "fromDate": start.strftime("%Y-%m-%dT%H:%M:%S"),
-            "toDate": end.strftime("%Y-%m-%dT%H:%M:%S"),
-            "interval": "QuarterHourly" if quaterHour else "Daily",
-            "unitOfConsumption": "KWH"
-        })
+    async def get_readings(
+        self,
+        meter_point_id: int,
+        start: datetime.datetime,
+        end: datetime.datetime,
+        quaterHour: bool = True,
+    ) -> ReadingResponse:
+        """Get the readings from the API."""
+        tz_vienna = await dt_util.async_get_time_zone("Europe/Vienna")
+        start = start.astimezone(tz_vienna)
+        end = end.astimezone(tz_vienna)
+        data = await self.loggedin_request(
+            "/getMeterReading",
+            {
+                "meterPointId": meter_point_id,
+                "fromDate": start.strftime("%Y-%m-%dT%H:%M:%S"),
+                "toDate": end.strftime("%Y-%m-%dT%H:%M:%S"),
+                "interval": "QuarterHourly" if quaterHour else "Daily",
+                "unitOfConsumption": "KWH",
+            },
+        )
 
-        return ReadingResponse(data)
+        return ReadingResponse(data, tz_vienna or pytz.utc)
+
 
 class LoginResponse:
+    """Response from the login request."""
+
     def __init__(self, data: dict) -> None:
         self.data = data
 
@@ -129,6 +143,7 @@ class LoginResponse:
     def success(self) -> bool:
         return self.data["success"]
 
+
 class InstallationsResponse:
     def __init__(self, data: dict) -> None:
         self.data = data
@@ -136,6 +151,7 @@ class InstallationsResponse:
     @property
     def installations(self) -> list[Installation]:
         return [Installation(installation) for installation in self.data]
+
 
 class Installation:
     def __init__(self, data: dict) -> None:
@@ -169,6 +185,7 @@ class Installation:
     def meterPoints(self) -> list[MeterPoint]:
         return [MeterPoint(meterPoint) for meterPoint in self.data["meterPoints"]]
 
+
 class MeterPoint:
     def __init__(self, data: dict) -> None:
         self.data = data
@@ -187,15 +204,19 @@ class MeterPoint:
 
     @property
     def readingsAvailableSince(self) -> datetime.datetime:
-        return datetime.datetime.strptime(self.data["readingsAvailableSince"], "%Y-%m-%dT%H:%M:%SZ")
+        return datetime.datetime.strptime(
+            self.data["readingsAvailableSince"], "%Y-%m-%dT%H:%M:%SZ"
+        )
 
     @property
     def meterType(self) -> str:
         return self.data["meterType"]
 
+
 class ReadingResponse:
-    def __init__(self, data: dict) -> None:
+    def __init__(self, data: dict, tz: datetime.tzinfo) -> None:
         self.data = data
+        self.tz = tz
 
     @property
     def intervalType(self) -> str:
@@ -208,9 +229,15 @@ class ReadingResponse:
     @property
     def meterReadingValues(self) -> list[TimedReadingValue]:
         # extract reading values from readings with readingtype "MR" and add timestamp
-        values = [TimedReadingValue(readingValue, reading.readTime) for reading in self.readings for readingValue in reading.readingValues if readingValue.readingType == "MR"]
+        values = [
+            TimedReadingValue(readingValue, reading.readTime, self.tz)
+            for reading in self.readings
+            for readingValue in reading.readingValues
+            if readingValue.readingType == "MR"
+        ]
         # sort by time
         return sorted(values, key=lambda x: x.time)
+
 
 class Reading:
     def __init__(self, data: dict) -> None:
@@ -218,16 +245,23 @@ class Reading:
 
     @property
     def readTime(self) -> datetime.datetime:
-        if self.data["readTime"][-1] == 'Z':
+        if self.data["readTime"][-1] == "Z":
             # parse 2023-11-12T23:00:00Z
-            return datetime.datetime.strptime(self.data["readTime"], "%Y-%m-%dT%H:%M:%SZ").astimezone(datetime.timezone.utc)
+            return datetime.datetime.strptime(
+                self.data["readTime"], "%Y-%m-%dT%H:%M:%SZ"
+            ).astimezone(datetime.timezone.utc)
 
         # parse 2023-11-03T00:00:00.000+01:00
-        return datetime.datetime.strptime(self.data["readTime"], "%Y-%m-%dT%H:%M:%S.%f+%z").astimezone(datetime.timezone.utc)
+        return datetime.datetime.strptime(
+            self.data["readTime"], "%Y-%m-%dT%H:%M:%S.%f+%z"
+        ).astimezone(datetime.timezone.utc)
 
     @property
     def readingValues(self) -> list[ReadingValue]:
-        return [ReadingValue(readingValue) for readingValue in self.data["readingValues"]]
+        return [
+            ReadingValue(readingValue) for readingValue in self.data["readingValues"]
+        ]
+
 
 class ReadingValue:
     def __init__(self, data: dict) -> None:
@@ -256,16 +290,21 @@ class ReadingValue:
     def readingState(self) -> str:
         return self.data["readingState"]
 
+
 class TimedReadingValue(ReadingValue):
-    def __init__(self, reading: ReadingValue, time: datetime.datetime) -> None:
+    def __init__(
+        self, reading: ReadingValue, time: datetime.datetime, tz: datetime.tzinfo
+    ) -> None:
         self.data = reading.data
-        self.time = time.replace(tzinfo=pytz.timezone("Europe/Vienna")).astimezone(pytz.utc)
+        self.time = time.replace(tzinfo=tz).astimezone(pytz.utc)
 
     def __repr__(self) -> str:
         return super().__repr__() + f" at {self.time}"
 
+
 class AuthException(exceptions.HomeAssistantError):
     """Exception to indicate an authentication error."""
+
 
 class UnknownResponseExeption(exceptions.HomeAssistantError):
     """Exception to indicate that the response code is unknown."""

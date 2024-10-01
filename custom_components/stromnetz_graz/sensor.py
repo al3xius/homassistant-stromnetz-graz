@@ -1,4 +1,5 @@
 """Platform for sensor integration."""
+
 from __future__ import annotations
 from .hub import EnergyMeter
 from homeassistant.components.sensor import (
@@ -16,6 +17,7 @@ from .hub import Hub
 
 _LOGGER = logging.getLogger(__name__)
 
+
 async def async_setup_entry(hass, config_entry, async_add_entities):
     """Set up platform for a new integration.
 
@@ -26,12 +28,8 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
 
     # _LOGGER.info(f"Setup Sensors with API: {api.username}")
 
-    sensors = []
-    for meter in MeterHub.meters:
-        # sensors.append(EnergySensor(meter))
-        sensors.append(MeterReadingSensor(meter))
+    sensors = [MeterReadingSensor(meter) for meter in MeterHub.meters]
     async_add_entities(sensors)
-
 
 
 class EnergySensor(CoordinatorEntity, SensorEntity):
@@ -52,7 +50,11 @@ class EnergySensor(CoordinatorEntity, SensorEntity):
     @property
     def device_info(self):
         """Return information to link this entity with the correct device."""
-        return {"identifiers": {(DOMAIN, self._meter.meter_id)}, "name": self._meter.name, "manufacturer": "Stromnetz Graz"}
+        return {
+            "identifiers": {(DOMAIN, self._meter.meter_id)},
+            "name": self._meter.name,
+            "manufacturer": "Stromnetz Graz",
+        }
 
     @property
     def available(self) -> bool:
@@ -62,7 +64,7 @@ class EnergySensor(CoordinatorEntity, SensorEntity):
     @property
     def name(self) -> str:
         """Return the name of the sensor."""
-        return 'Consumed Energy'
+        return "Consumed Energy"
 
     @property
     def state(self):
@@ -77,21 +79,19 @@ class EnergySensor(CoordinatorEntity, SensorEntity):
     @callback
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""
-        _LOGGER.info(f"Updating meter {self._meter._id}")
-        _LOGGER.info(f"Data: {self._meter.coordinator.data}")
-        self._state= self.coordinator.data[self._meter.meter_id]["consumption"]
+        # _LOGGER.info("Updating meter {self._meter._id}")
+        # _LOGGER.info("Data: {self._meter.coordinator.data}")
+        self._state = self.coordinator.data[str(self._meter.meter_id)]["consumption"]
         self.async_write_ha_state()
 
 
-
 class MeterReadingSensor(CoordinatorEntity, SensorEntity):
-    """Enery Sensor base on Api data"""
+    """Enery Sensor base on Api data."""
 
     _attr_name = "Meter Reading"
     _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
     _attr_device_class = SensorDeviceClass.ENERGY
     _attr_state_class = SensorStateClass.TOTAL_INCREASING
-
 
     def __init__(self, meter: EnergyMeter) -> None:
         """Initialize the sensor."""
@@ -103,7 +103,11 @@ class MeterReadingSensor(CoordinatorEntity, SensorEntity):
     @property
     def device_info(self):
         """Return information to link this entity with the correct device."""
-        return {"identifiers": {(DOMAIN, self._meter.meter_id)}, "name": self._meter.name, "manufacturer": "Stromnetz Graz"}
+        return {
+            "identifiers": {(DOMAIN, self._meter.meter_id)},
+            "name": self._meter.name,
+            "manufacturer": "Stromnetz Graz",
+        }
 
     @property
     def available(self) -> bool:
@@ -113,7 +117,7 @@ class MeterReadingSensor(CoordinatorEntity, SensorEntity):
     @property
     def name(self) -> str:
         """Return the name of the sensor."""
-        return 'Meter Reading'
+        return "Meter Reading"
 
     # @property
     # def state(self):
