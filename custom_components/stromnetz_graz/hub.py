@@ -4,7 +4,7 @@ from typing import Any, Callable, Optional, Dict
 
 import pytz
 from homeassistant.components.recorder.models.statistics import StatisticData, StatisticMetaData
-from homeassistant.const import ENERGY_KILO_WATT_HOUR
+from homeassistant.const import UnitOfEnergy
 from homeassistant.core import HomeAssistant
 import logging
 from homeassistant.helpers.update_coordinator import (
@@ -74,6 +74,7 @@ class Coordianator(DataUpdateCoordinator):
                 if not last_stats:
                     reading = await self.api.get_readings(meter.meter_id, meter.lastValid, datetime.datetime.now())
                 else:
+                    # only get readings after the last reading
                     start = last_stats[statistic_id][0].get("start")
                     last_stats_time = datetime.datetime.fromtimestamp(start or 0)
                     last_stats_time = last_stats_time.replace(minute=1)
@@ -111,8 +112,6 @@ class Coordianator(DataUpdateCoordinator):
                 # Update history with valid readings
                 statistics = []
                 for r in validReadings:
-                    # convert from vienna time to utc
-
                     timestamp = r.time.replace(tzinfo=pytz.utc, minute=0, second=0, microsecond=0)
                     statistics.append(
                         StatisticData(
@@ -129,7 +128,7 @@ class Coordianator(DataUpdateCoordinator):
                     name=f"{meter.name}",
                     statistic_id=statistic_id,
                     has_mean=False,
-                    unit_of_measurement=ENERGY_KILO_WATT_HOUR,
+                    unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
                     has_sum=True,
                 )
 

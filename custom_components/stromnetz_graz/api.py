@@ -2,6 +2,7 @@ from __future__ import annotations
 import datetime
 from typing import Optional
 import aiohttp
+import pytz
 from .const import API_HOST
 from homeassistant import exceptions
 import logging
@@ -39,17 +40,15 @@ class StromNetzGrazAPI():
             f"{API_HOST}/login",
             json={"email": self.email, "password": self.password},
         ) as response:
-            print("Logging in!")
-            print(response)
             if response.status != 200:
-                _LOGGER.error("Could not log in! Statuscode is: ", response.status)
+                _LOGGER.error("Login - Could not log in! Statuscode is: ", response.status)
                 raise AuthException
-
+            
             # check for mime type
             mime = response.headers.get("Content-Type") or ""
 
             if "application/json" not in mime:
-                _LOGGER.error("Unknown response from API: %s", mime)
+                _LOGGER.error("Login - Unknown response from API: %s", mime)
                 raise AuthException
 
 
@@ -83,22 +82,19 @@ class StromNetzGrazAPI():
                 return await self.loggedin_request(url, json)
 
             if response.status != 200:
-                _LOGGER.error("Statuscode is: ", response.status)
+                _LOGGER.error("%s - Statuscode is: ", url, response.status)
                 raise UnknownResponseExeption
 
             # check for mime type
             mime = response.headers.get("Content-Type") or ""
             if "application/json" not in mime:
-                _LOGGER.error("Unknown response from API: %s", mime)
+                _LOGGER.error("%s - Unknown response from API: %s", url, mime)
+                body = await response.text()
+                _LOGGER.error("%s - Body: %s", url, body)
                 raise UnknownResponseExeption
 
 
-            # _LOGGER.info(f"{url}: {json}")
-            _LOGGER.info(f"{url}: {response.status}")
-            _LOGGER.info(f"{url}: {response.headers}")
-
             data = await response.json()
-            # _LOGGER.info(f"{url}: {data}")
             return data
 
     async def get_installations(self) -> InstallationsResponse:
@@ -263,7 +259,7 @@ class ReadingValue:
 class TimedReadingValue(ReadingValue):
     def __init__(self, reading: ReadingValue, time: datetime.datetime) -> None:
         self.data = reading.data
-        self.time = time
+        self.time = time.replace(tzinfo=pytz.timezone("Europe/Vienna")).astimezone(pytz.utc)
 
     def __repr__(self) -> str:
         return super().__repr__() + f" at {self.time}"
