@@ -1,4 +1,5 @@
 from __future__ import annotations
+import ssl
 from .const import API_HOST
 import aiohttp
 import datetime
@@ -32,6 +33,15 @@ class StromNetzGrazAPI:
             self.session = aiohttp.ClientSession()
         if session is not None:
             self.session = session
+
+        # ignore_ssl = False
+        # if ignore_ssl:
+        #     ssl_ctx = ssl.create_default_context()
+        #     ssl_ctx.check_hostname = False
+        #     ssl_ctx.verify_mode = ssl.CERT_NONE
+        #     self.session = aiohttp.ClientSession(
+        #         connector=aiohttp.TCPConnector(ssl=ssl_ctx)
+        #     )
 
     async def token_request(self) -> str:
         """Get the token from the API."""
@@ -111,15 +121,20 @@ class StromNetzGrazAPI:
         tz_vienna = await dt_util.async_get_time_zone("Europe/Vienna")
         start = start.astimezone(tz_vienna)
         end = end.astimezone(tz_vienna)
+
+        request_body = {
+            "meterPointId": meter_point_id,
+            "fromDate": start.strftime("%Y-%m-%dT%H:%M:%S+02:00"),
+            "toDate": end.strftime("%Y-%m-%dT%H:%M:%S+02:00"),
+            "interval": "QuarterHourly" if quaterHour else "Daily",
+            "unitOfConsumption": "KWH",
+        }
+
+        _LOGGER.info("Requesting readings %s", request_body)
+
         data = await self.loggedin_request(
             "/getMeterReading",
-            {
-                "meterPointId": meter_point_id,
-                "fromDate": start.strftime("%Y-%m-%dT%H:%M:%S"),
-                "toDate": end.strftime("%Y-%m-%dT%H:%M:%S"),
-                "interval": "QuarterHourly" if quaterHour else "Daily",
-                "unitOfConsumption": "KWH",
-            },
+            request_body,
         )
 
         return ReadingResponse(data, tz_vienna or pytz.utc)
