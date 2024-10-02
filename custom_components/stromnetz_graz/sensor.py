@@ -63,7 +63,6 @@ class MeterReadingSensor(CoordinatorEntity, SensorEntity):
     _attr_state_class = SensorStateClass.TOTAL_INCREASING
 
     _attr_entity_picture = "https://www.stromnetz-graz.at/static/frontend/Magento/sgg/de_AT/images/logo_sgg.svg"
-    _entity_component_unrecorded_attributes = MATCH_ALL
 
     def __init__(self, meter: EnergyMeter) -> None:
         """Initialize the sensor."""
