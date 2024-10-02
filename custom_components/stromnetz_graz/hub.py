@@ -156,12 +156,12 @@ class Coordianator(DataUpdateCoordinator):
             if len(validReadings) == 0:
                 continue
 
-            _LOGGER.info(
-                "Setting reading for meter %s to %s",
-                meter.name,
-                validReadings[-1].value,
-            )
-            meter.setReading(validReadings[-1])
+            # _LOGGER.info(
+            #     "Setting reading for meter %s to %s",
+            #     meter.name,
+            #     validReadings[-1].value,
+            # )
+            # meter.setReading(validReadings[-1])
 
             # Filter out all but the last reading of each hour
             validReadings = self._only_last_reading_of_each_hour(validReadings)

@@ -128,7 +128,7 @@ class StromNetzGrazAPI:
         duration = end - start
 
         # if larger than 5 months recursive call
-        if duration.days > 30*5:
+        if duration.days > 30 * 5:
             # split the duration in half
             half = duration // 2
             # get the first half
@@ -349,7 +349,8 @@ class TimedReadingValue(ReadingValue):
         self, reading: ReadingValue, time: datetime.datetime, tz: datetime.tzinfo
     ) -> None:
         self.data = reading.data
-        self.time = time.replace(tzinfo=tz).astimezone(pytz.utc)
+        # self.time = time.replace(tzinfo=tz).astimezone(pytz.utc)
+        self.time = time.astimezone(tz)
 
     def __repr__(self) -> str:
         return super().__repr__() + f" at {self.time}"

@@ -10,7 +10,7 @@ from homeassistant.components.sensor import (
     SensorEntity,
     SensorStateClass,
 )
-from homeassistant.const import UnitOfEnergy
+from homeassistant.const import MATCH_ALL, UnitOfEnergy
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.core import callback
 from homeassistant.helpers import config_validation as cv, entity_platform, service
@@ -61,6 +61,9 @@ class MeterReadingSensor(CoordinatorEntity, SensorEntity):
     _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
     _attr_device_class = SensorDeviceClass.ENERGY
     _attr_state_class = SensorStateClass.TOTAL_INCREASING
+
+    _attr_entity_picture = "https://www.stromnetz-graz.at/static/frontend/Magento/sgg/de_AT/images/logo_sgg.svg"
+    _entity_component_unrecorded_attributes = MATCH_ALL
 
     def __init__(self, meter: EnergyMeter) -> None:
         """Initialize the sensor."""
