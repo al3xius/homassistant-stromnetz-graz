@@ -205,7 +205,7 @@ class Coordianator(DataUpdateCoordinator):
             )
 
             # Add statistics to meter
-            async_import_statistics(self.hass, metadata_sensor, statistics)
+            # async_import_statistics(self.hass, metadata_sensor, statistics)
 
             # Add additional statistics
             async_add_external_statistics(self.hass, metadata, statistics)
