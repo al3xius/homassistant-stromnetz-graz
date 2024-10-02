@@ -16,5 +16,25 @@
                 }
             }
         }
+   },
+   "services": {
+      "sync_data": {
+        "name": "Sync Data",
+        "description": "Sync Data from Stromnetz Graz API",
+        "fields": {
+            "sync_all": {
+                "name": "Sync All",
+                "description": "Sync all data from Stromnetz Graz API"
+            }
+        }
+      }
+   },
+   "selector": {
+      "sync_type": {
+        "options": {
+            "true": "True",
+            "false": "False"
+        }
+      }
    }
 }

@@ -1,0 +1,15 @@
+
+sync_data:
+  target:
+   entity:
+    domain: sensor
+  fields:
+   sync_all:
+    required: false
+    default: false
+    selector:
+      select:
+        translation_key: "sync_type"
+        options:
+          - "true"
+          - "false"

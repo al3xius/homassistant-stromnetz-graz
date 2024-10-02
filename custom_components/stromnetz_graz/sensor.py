@@ -1,6 +1,9 @@
 """Platform for sensor integration."""
 
 from __future__ import annotations
+
+import voluptuous as vol
+
 from .hub import EnergyMeter
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -10,10 +13,12 @@ from homeassistant.components.sensor import (
 from homeassistant.const import UnitOfEnergy
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.core import callback
+from homeassistant.helpers import config_validation as cv, entity_platform, service
 
 from .const import DOMAIN
 import logging
 from .hub import Hub
+
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -36,6 +41,17 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
     # add sensors
     async_add_entities(sensors)
 
+    platform = entity_platform.async_get_current_platform()
+    platform.async_register_entity_service(
+        "sync_data", {vol.Optional("sync_all"): cv.boolean}, sync_data
+    )
+
+
+async def sync_data(entity, service_call):
+    """Sync data from API."""
+    _LOGGER.info(f"Syncing data for {entity.name}")
+    sync_all = service_call.data.get("sync_all", False)
+    await entity.coordinator.sync_data(sync_all)
 
 
 class MeterReadingSensor(CoordinatorEntity, SensorEntity):
