@@ -46,12 +46,22 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
         "sync_data", {vol.Optional("sync_all"): cv.boolean}, sync_data
     )
 
+    platform.async_register_entity_service("clear_data", {}, clear_data)
 
-async def sync_data(entity, service_call):
+
+async def sync_data(entity: MeterReadingSensor, service_call):
     """Sync data from API."""
     _LOGGER.info(f"Syncing data for {entity.name}")
     sync_all = service_call.data.get("sync_all", False)
+    if sync_all:
+        await entity.coordinator.clear_data()
     await entity.coordinator.sync_data(sync_all)
+
+
+async def clear_data(entity: MeterReadingSensor, service_call):
+    """Sync data from API."""
+    _LOGGER.info("Clear data for %s", entity.name)
+    await entity.coordinator.clear_data()
 
 
 class MeterReadingSensor(CoordinatorEntity, SensorEntity):

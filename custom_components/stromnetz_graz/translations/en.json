@@ -27,6 +27,10 @@
                 "description": "Sync all data from Stromnetz Graz API"
             }
         }
+      },
+      "clear_data": {
+        "name": "Clear Data",
+        "description": "Clears Data of Stromnetz Graz API"
       }
    },
    "selector": {

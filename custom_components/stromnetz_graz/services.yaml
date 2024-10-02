@@ -13,3 +13,8 @@ sync_data:
         options:
           - "true"
           - "false"
+
+clear_data:
+  target:
+   entity:
+    domain: sensor

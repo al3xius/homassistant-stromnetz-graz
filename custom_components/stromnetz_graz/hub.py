@@ -31,6 +31,7 @@ from homeassistant.components.recorder.statistics import (
     async_add_external_statistics,
     get_last_statistics,
     async_import_statistics,
+    clear_statistics,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -209,6 +210,16 @@ class Coordianator(DataUpdateCoordinator):
 
             # Add additional statistics
             async_add_external_statistics(self.hass, metadata, statistics)
+
+    async def clear_data(self):
+        # statistic_ids = [f"{DOMAIN}:{meter.meter_id}_reading" for meter in self.meters]
+        # recorder = get_instance(self.hass)
+        # # clear_statistics(recorder, statistic_ids)
+
+        # await get_instance(self.hass).async_add_executor_job(
+        #         clear_statistics, recorder, statistic_ids
+        # )
+        pass
 
 
 class EnergyMeter(CoordinatorEntity):
