@@ -351,7 +351,7 @@ class TimedReadingValue(ReadingValue):
         self.data = reading.data
         # self.time = time.replace(tzinfo=tz).astimezone(pytz.utc)
         # self.time = time.astimezone(pytz.utc)
-        self.time = time
+        self.time = time + datetime.timedelta(hours=1)
 
     def __repr__(self) -> str:
         return super().__repr__() + f" at {self.time}"
